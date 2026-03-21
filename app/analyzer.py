@@ -86,10 +86,13 @@ async def analyze_logs(logs: str, context: str | None, settings: Settings) -> Lo
         user_message += f"\n\nADDITIONAL CONTEXT:\n{context}"
     user_message += f"\n\nLOCAL PATTERN SUMMARY (for reference):\n{json.dumps([p.model_dump() for p in local_patterns], indent=2)}"
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client = AsyncOpenAI(
+        api_key=settings.groq_api_key,
+        base_url="https://api.groq.com/openai/v1",
+    )
 
     response = await client.chat.completions.create(
-        model="gpt-4o",
+        model="llama-3.3-70b-versatile",
         temperature=0.2,
         response_format={"type": "json_object"},
         messages=[

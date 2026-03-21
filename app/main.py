@@ -1,5 +1,4 @@
-from fastapi import Depends, FastAPI, HTTPException, Security, status
-from fastapi.security import APIKeyHeader
+from fastapi import Depends, FastAPI, HTTPException, status
 
 from app.analyzer import analyze_logs
 from app.config import Settings, get_settings
@@ -11,30 +10,20 @@ app = FastAPI(
         "AI-powered system log analyzer that identifies **root causes** and "
         "suggests **fixes** using LLM reasoning.\n\n"
         "### How to use\n"
-        "1. Obtain an API key (set `OPENAI_API_KEY` in `.env`).\n"
+        "1. Set `GROQ_API_KEY` in the `.env` file (free at https://console.groq.com/keys).\n"
         "2. POST raw system logs to `/analyze`.\n"
         "3. Receive structured root-cause analysis with suggested fixes."
     ),
     version="0.1.0",
 )
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-
-async def verify_api_key(
-    api_key: str | None = Security(api_key_header),
-    settings: Settings = Depends(get_settings),
-) -> Settings:
-    """Validate that the caller provided a matching API key."""
-    if not settings.openai_api_key:
+def get_verified_settings(settings: Settings = Depends(get_settings)) -> Settings:
+    """Ensure the OpenAI API key is configured."""
+    if not settings.groq_api_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server misconfigured: OPENAI_API_KEY is not set in .env",
-        )
-    if not api_key or api_key != settings.openai_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API key. Pass your key via the X-API-Key header.",
+            detail="Server misconfigured: GROQ_API_KEY is not set in .env",
         )
     return settings
 
@@ -54,7 +43,7 @@ async def health_check():
 )
 async def analyze(
     request: LogAnalysisRequest,
-    settings: Settings = Depends(verify_api_key),
+    settings: Settings = Depends(get_verified_settings),
 ) -> LogAnalysisResponse:
     try:
         result = await analyze_logs(request.logs, request.context, settings)
