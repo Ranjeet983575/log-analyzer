@@ -1,0 +1,25 @@
+[project]
+name = "log-analyzer"
+version = "0.1.0"
+description = "AI-powered Log Analyzer - Root cause analysis and suggested fixes using LLM reasoning"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.6",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.4",
+    "pydantic-settings>=2.7.1",
+    "python-dotenv>=1.0.1",
+    "openai>=1.58.1",
+    "python-multipart>=0.0.20",
+]
+
+[project.scripts]
+log-analyzer = "app.main:start"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
