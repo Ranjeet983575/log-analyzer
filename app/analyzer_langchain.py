@@ -1,9 +1,10 @@
 import json
 import re
 from collections import Counter
+from typing import List
 
-from langchain_core.prompts import ChatPromptTemplate  # New unified import
-from langchain_groq import ChatGroq 
+from langchain_core.prompts import ChatPromptTemplate  # v0.2 ONLY
+from langchain_groq import ChatGroq
 
 from app.config import Settings
 from app.models import (
@@ -59,7 +60,7 @@ def _classify_severity(line: str) -> SeverityLevel:
     return SeverityLevel.UNKNOWN
 
 
-def _extract_patterns(logs: str) -> list[PatternMatch]:
+def _extract_patterns(logs: str) -> List[PatternMatch]:
     lines = [line.strip() for line in logs.strip().splitlines() if line.strip()]
     normalized = []
     for line in lines:
@@ -70,31 +71,31 @@ def _extract_patterns(logs: str) -> list[PatternMatch]:
         normalized.append(n)
 
     counter = Counter(normalized)
-    patterns: list[PatternMatch] = []
+    patterns: List[PatternMatch] = []
     for pattern_text, count in counter.most_common(10):
-        severities = [_classify_severity(orig) for orig, norm in zip(lines, normalized) if norm == pattern_text]
+        # Find original lines matching this normalized pattern
+        matching_originals = [orig for orig, norm in zip(lines, normalized) if norm == pattern_text]
+        severities = [_classify_severity(orig) for orig in matching_originals]
         severity = max(severities, key=lambda s: s.value) if severities else SeverityLevel.UNKNOWN
         patterns.append(PatternMatch(pattern=pattern_text, occurrences=count, severity=severity))
     return patterns
 
 
 # -------------------------------
-# LangChain-based log analyzer
+# LangChain-based log analyzer (v0.2+ FIXED)
 # -------------------------------
 async def analyze_logs_langchain(logs: str, context: str | None, settings: Settings) -> LogAnalysisResponse:
     """
-    Analyze system logs using LangChain with proper PromptTemplates.
+    Analyze system logs using LangChain v0.2+ with ChatGroq.
     """
-
     # 1️⃣ Extract local patterns
     local_patterns = _extract_patterns(logs)
     local_pattern_summary = json.dumps([p.model_dump() for p in local_patterns], indent=2)
 
-    # 2️⃣ Create PromptTemplates
-    system_prompt_template = SystemMessagePromptTemplate.from_template(SYSTEM_PROMPT)
-
-    human_prompt_template = HumanMessagePromptTemplate.from_template(
-        """LOGS:
+    # 2️⃣ v0.2: ChatPromptTemplate.from_messages() with tuples
+    chat_prompt = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        ("human", """LOGS:
 {logs}
 
 ADDITIONAL CONTEXT:
@@ -102,40 +103,47 @@ ADDITIONAL CONTEXT:
 
 LOCAL PATTERN SUMMARY (for reference):
 {local_patterns}
-"""
-    )
+""")
+    ])
 
-    chat_prompt = ChatPromptTemplate.from_messages(
-        [system_prompt_template, human_prompt_template]
-    )
-
-    # 3️⃣ Format prompt dynamically
-    messages = chat_prompt.format_prompt(
+    # 3️⃣ Format to messages
+    messages = chat_prompt.format_messages(
         logs=logs,
         context=context or "",
         local_patterns=local_pattern_summary
-    ).to_messages()
+    )
 
-    # 4️⃣ Initialize Chat LLM
+    # 4️⃣ ChatGroq
     chat = ChatGroq(
-        model="llama3-groq-70b-8192-tool-use-preview",  # or "mixtral-8x7b-32768", "gemma2-9b-it"
+        model="llama3-groq-70b-8192-tool-use-preview",  # JSON-friendly
         temperature=0.2,
-        api_key=settings.groq_api_key  # Use GROQ_API_KEY env var or pass explicitly
-    )   
+        api_key=getattr(settings, 'groq_api_key', None)  # Safe access
+    )
 
-    # 5️⃣ Generate response
-    response = await chat.agenerate(messages=[[*messages]])
-    raw_text = response.generations[0][0].text or "{}"
+    # 5️⃣ v0.2: invoke() + .content
+    response = await chat.invoke(messages)
+    raw_text = response.content or "{}"
 
-    # 6️⃣ Parse JSON safely
+    # 6️⃣ Parse JSON safely, with debug logging
     try:
         data = json.loads(raw_text)
-    except json.JSONDecodeError:
-        data = {}
+    except json.JSONDecodeError as e:
+        # Log the raw response for debugging
+        print("[LLM JSONDecodeError] Raw response:\n", raw_text)
+        raise ValueError(f"LLM returned invalid JSON: {e}\nRaw: {raw_text}")
 
-    return LogAnalysisResponse(
-        patterns=[PatternMatch(**p) for p in data.get("patterns", [])],
-        root_cause=RootCause(**data["root_cause"]) if "root_cause" in data else RootCause(summary="", detail="", confidence=0.0),
-        suggested_fixes=[SuggestedFix(**f) for f in data.get("suggested_fixes", [])],
-        summary=data.get("summary", ""),
-    )
+    # Check for required fields
+    if not isinstance(data, dict) or "patterns" not in data or "root_cause" not in data or "suggested_fixes" not in data:
+        print("[LLM Response Error] Missing required fields. Raw response:\n", raw_text)
+        raise ValueError(f"LLM response missing required fields: {data}")
+
+    try:
+        return LogAnalysisResponse(
+            patterns=[PatternMatch(**p) for p in data.get("patterns", [])],
+            root_cause=RootCause(**data.get("root_cause", {})),
+            suggested_fixes=[SuggestedFix(**f) for f in data.get("suggested_fixes", [])],
+            summary=data.get("summary", ""),
+        )
+    except Exception as e:
+        print("[Model Construction Error] Data:", data)
+        raise ValueError(f"Failed to construct response model: {e}\nData: {data}")

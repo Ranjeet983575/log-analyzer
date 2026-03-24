@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 
 from app.analyzer import analyze_logs
+from app.analyzer_langchain import analyze_logs_langchain
 from app.config import Settings, get_settings
 from app.models import LogAnalysisRequest, LogAnalysisResponse
 
@@ -44,6 +45,31 @@ async def analyze(
         )
     return result
 
+@router.post(
+    "/analyze-langchain",
+    response_model=LogAnalysisResponse,
+    tags=["Analysis"],
+    summary="Analyze system logs",
+    description="Submit raw system logs and receive AI-powered root-cause analysis with suggested fixes.",
+)
+async def analyze(
+    request: LogAnalysisRequest,
+    settings: Settings = Depends(get_verified_settings),
+) -> LogAnalysisResponse:
+    try:
+        result = await analyze_logs_langchain(request.logs, request.context, settings)
+        return result
+    except Exception as exc:
+        # More specific error details for debugging
+        detail = f"LLM analysis failed: {str(exc)}"
+        if "GROQ" in str(exc).upper():
+            detail += " Check your GROQ_API_KEY and quota."
+        elif "JSON" in str(exc).upper():
+            detail += " Model returned invalid JSON format."
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=detail,
+        )
 
 # Analyze logs from file upload
 @router.post(
