@@ -1,9 +1,9 @@
 [project]
 name = "log-analyzer"
-version = "0.1.0"
-description = "AI-powered Log Analyzer - Root cause analysis and suggested fixes using LLM reasoning"
+version = "0.2.0"
+description = "AI-powered Log Analyzer - Root cause analysis and suggested fixes using LLM reasoning (LangChain-enabled)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "fastapi>=0.115.6",
     "uvicorn[standard]>=0.34.0",
@@ -12,6 +12,9 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "openai>=1.58.1",
     "python-multipart>=0.0.20",
+    "langchain>=1.2.0,<=1.2.13",   # compatible with Python 3.13
+    "aiohttp>=3.9.0",               # optional, for async HTTP calls used by LangChain
+    "chromadb>=0.4.0",              # optional, if you plan vector DB storage
 ]
 
 [project.scripts]

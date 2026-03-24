@@ -1,8 +1,9 @@
-from fastapi import Depends, FastAPI, HTTPException, status, UploadFile, File, Form
+from fastapi import FastAPI
+from app.router import router
 
-from app.analyzer import analyze_logs
-from app.config import Settings, get_settings
-from app.models import LogAnalysisRequest, LogAnalysisResponse
+from app.config import get_settings, Settings
+
+settings: Settings = get_settings()
 
 app = FastAPI(
     title="AI Log Analyzer",
@@ -10,79 +11,21 @@ app = FastAPI(
         "AI-powered system log analyzer that identifies **root causes** and "
         "suggests **fixes** using LLM reasoning.\n\n"
         "### How to use\n"
-        "1. Set `GROQ_API_KEY` in the `.env` file (free at https://console.groq.com/keys).\n"
+        "1. Set `OPENAI_API_KEY` in the `.env` file.\n"
         "2. POST raw system logs to `/analyze`.\n"
         "3. Receive structured root-cause analysis with suggested fixes."
     ),
-    version="0.1.0",
+    version="0.2.0",
 )
 
-
-def get_verified_settings(settings: Settings = Depends(get_settings)) -> Settings:
-    """Ensure the OpenAI API key is configured."""
-    if not settings.groq_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server misconfigured: GROQ_API_KEY is not set in .env",
-        )
-    return settings
-
-
-@app.get("/health", tags=["Health"])
-async def health_check():
-    """Health-check endpoint."""
-    return {"status": "ok"}
-
-
-@app.post(
-    "/analyze",
-    response_model=LogAnalysisResponse,
-    tags=["Analysis"],
-    summary="Analyze system logs",
-    description="Submit raw system logs and receive AI-powered root-cause analysis with suggested fixes.",
-)
-async def analyze(
-    request: LogAnalysisRequest,
-    settings: Settings = Depends(get_verified_settings),
-) -> LogAnalysisResponse:
-    try:
-        result = await analyze_logs(request.logs, request.context, settings)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"LLM analysis failed: {exc}",
-        )
-    return result
-
-
-@app.post(
-    "/analyze/upload",
-    response_model=LogAnalysisResponse,
-    tags=["Analysis"],
-    summary="Analyze logs from file upload",
-    description="Upload a log file and optionally provide context. No JSON escaping needed.",
-)
-async def analyze_upload(
-    file: UploadFile = File(..., description="Log file to analyze"),
-    context: str = Form(None, description="Optional context about the system"),
-    settings: Settings = Depends(get_verified_settings),
-) -> LogAnalysisResponse:
-    logs = (await file.read()).decode("utf-8", errors="replace")
-    try:
-        result = await analyze_logs(logs, context, settings)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"LLM analysis failed: {exc}",
-        )
-    return result
+# Include router
+app.include_router(router)
 
 
 def start():
-    """Entry-point for `log-analyzer` CLI script."""
+    """Entry-point for CLI script."""
     import uvicorn
 
-    settings = get_settings()
     uvicorn.run(
         "app.main:app",
         host=settings.app_host,
