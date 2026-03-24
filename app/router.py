@@ -60,7 +60,7 @@ async def analyze_upload(
 ) -> LogAnalysisResponse:
     logs = (await file.read()).decode("utf-8", errors="replace")
     try:
-        result = await analyze_logs_langchain(logs, context, settings)
+        result = await analyze_logs(logs, context, settings)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
