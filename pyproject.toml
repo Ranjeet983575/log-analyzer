@@ -10,11 +10,18 @@ dependencies = [
     "pydantic>=2.10.4",
     "pydantic-settings>=2.7.1",
     "python-dotenv>=1.0.1",
-    "openai>=1.58.1",
     "python-multipart>=0.0.20",
-    "langchain>=1.2.0,<=1.2.13",   # compatible with Python 3.13
-    "aiohttp>=3.9.0",               # optional, for async HTTP calls used by LangChain
-    "chromadb>=0.4.0",              # optional, if you plan vector DB storage
+    "openai>=1.58.1",
+    
+    # LangChain v0.2+ (modular - no more monolithic 'langchain')
+    "langchain-core>=0.3.12",
+    "langchain-groq>=0.2.0",        # ChatGroq for Groq models
+    "langchain-community>=0.3.0",   # Community tools/integrations if needed
+    
+    # Optional: uncomment if using vector DB, OpenAI fallback, etc.
+    # "langchain-openai>=0.2.2",    # OpenAI fallback
+    # "chromadb>=0.5.11",           # Vector DB
+    # "aiohttp>=3.12.1",            # Async HTTP (often needed)
 ]
 
 [project.scripts]
