@@ -180,15 +180,15 @@ async def analyze_logs_langchain(logs: str, context: str | None, settings: Setti
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content=f"""
-LOGS:
-{logs}
+    LOGS:
+    {logs}
 
-CONTEXT:
-{context or ''}
+    CONTEXT:
+    {context or ''}
 
-LOCAL PATTERNS:
-{local_pattern_summary}
-        """)
+    LOCAL PATTERNS:
+    {local_pattern_summary}
+    """)
     ]
 
     # 3️⃣ LangChain model
